@@ -16,6 +16,19 @@ export function ProviderIcon(props: ProviderIconProps) {
   const size = props.size ?? 16;
   const mono = isDarkMode ? "#e5e5e5" : "#171717";
 
+  if (props.provider === "pi") {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M4 7h16M9 7v13M17 7v10c0 2 1 3 3 3"
+          stroke={mono}
+          strokeWidth={2.5}
+          strokeLinecap="round"
+        />
+      </Svg>
+    );
+  }
+
   if (props.provider?.trim().toLowerCase() === "antigravity") {
     return (
       <Image

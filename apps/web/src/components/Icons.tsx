@@ -854,6 +854,17 @@ export const MacAccessibilityIcon: Icon = (props) => {
 };
 
 // Codex's Computer Use app mark, shown on computer-use rows in the work log.
+export const PiIcon: Icon = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+    <path
+      d="M4 7h16M9 7v13M17 7v10c0 2 1 3 3 3"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 export const ComputerUseAppIcon: Icon = (props) => {
   const gradientId = `${useId().replaceAll(":", "")}-computer-use-app-gradient`;
   return (
