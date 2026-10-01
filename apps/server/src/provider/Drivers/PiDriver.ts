@@ -210,18 +210,24 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv> = {
                   ]
                 : [],
             ),
-            slashCommands: entries.flatMap((entry) =>
-              Predicate.isObject(entry) && typeof entry.name === "string"
-                ? [
-                    {
-                      name: entry.name,
-                      ...(typeof entry.description === "string"
-                        ? { description: entry.description }
-                        : {}),
-                    },
-                  ]
-                : [],
-            ),
+            slashCommands: [
+              ...entries.flatMap((entry) =>
+                Predicate.isObject(entry) && typeof entry.name === "string"
+                  ? [
+                      {
+                        name: entry.name,
+                        ...(typeof entry.description === "string"
+                          ? { description: entry.description }
+                          : {}),
+                      },
+                    ]
+                  : [],
+              ),
+              {
+                name: "compact",
+                description: "Compact the conversation using Pi's native compaction.",
+              },
+            ],
           };
         }).pipe(
           Effect.scoped,

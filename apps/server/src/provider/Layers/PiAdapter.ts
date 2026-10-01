@@ -126,6 +126,7 @@ export const makePiAdapter = Effect.fn("makePiAdapter")(function* (
   const now = DateTime.now.pipe(Effect.map(DateTime.formatIso));
   const emit = (ctx: Session, event: EventInput) =>
     Effect.gen(function* () {
+      const turnId = event.turnId ?? ctx.activeTurn;
       yield* PubSub.publish(events, {
         ...event,
         eventId: EventId.make(yield* uuid),
@@ -133,7 +134,7 @@ export const makePiAdapter = Effect.fn("makePiAdapter")(function* (
         providerInstanceId: options.instanceId,
         threadId: ctx.session.threadId,
         createdAt: yield* now,
-        ...(ctx.activeTurn ? { turnId: ctx.activeTurn } : {}),
+        ...(turnId ? { turnId } : {}),
       });
     }).pipe(Effect.orDie);
   const get = (threadId: ThreadId) =>
@@ -168,9 +169,10 @@ export const makePiAdapter = Effect.fn("makePiAdapter")(function* (
   const settle = (ctx: Session) =>
     Effect.gen(function* () {
       if (!ctx.activeTurn) return;
-      yield* cancelPending(ctx);
-      yield* emit(ctx, {
+      const turnId = ctx.activeTurn;
+      const completion: EventInput = {
         type: "turn.completed",
+        turnId,
         payload: {
           state: ctx.interrupted ? "interrupted" : ctx.failed ? "failed" : "completed",
           ...(ctx.failed ? { errorMessage: ctx.failed } : {}),
@@ -183,14 +185,17 @@ export const makePiAdapter = Effect.fn("makePiAdapter")(function* (
             outputTokens: ctx.outputTokens,
           },
         },
-      });
+      };
+      // Retire the turn before publishing: subscribers may close or resume the
+      // session as soon as they observe completion.
       ctx.activeTurn = undefined;
       ctx.assistantItem = undefined;
       ctx.reasoningItem = undefined;
-      ctx.session = { ...ctx.session, status: "ready", updatedAt: yield* now };
       const { activeTurnId: _active, ...idle } = ctx.session;
-      ctx.session = idle;
+      ctx.session = { ...idle, status: "ready", updatedAt: yield* now };
+      yield* cancelPending(ctx);
       yield* emit(ctx, { type: "session.state.changed", payload: { state: "ready" } });
+      yield* emit(ctx, completion);
     });
   const handle = (ctx: Session, record: PiRecord): Effect.Effect<void> =>
     Effect.gen(function* () {

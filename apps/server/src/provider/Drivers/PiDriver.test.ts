@@ -65,6 +65,10 @@ it.layer(layer)("Pi driver", (it) => {
       });
       expect(snapshot.models[0]?.slug).toBe("test/model/with-slash");
       expect(snapshot.slashCommands[0]?.name).toBe("skill:test");
+      expect(snapshot.slashCommands).toContainEqual({
+        name: "compact",
+        description: "Compact the conversation using Pi's native compaction.",
+      });
     }).pipe(Effect.scoped),
   );
 

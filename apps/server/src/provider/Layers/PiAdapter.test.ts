@@ -74,6 +74,22 @@ it("splits LF records across chunks while preserving Unicode separators and CRLF
 });
 
 it.layer(testLayer)("Pi adapter", (it) => {
+  it.effect("does not replay completion when a finished session is immediately resumed", () =>
+    Effect.gen(function* () {
+      const { adapter, until } = yield* setup();
+      const session = yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      const first = yield* adapter.sendTurn({ threadId, input: "First" });
+      expect((yield* until("turn.completed")).turnId).toBe(first.turnId);
+      yield* adapter.stopSession(threadId);
+      yield* adapter.startSession({
+        threadId,
+        runtimeMode: "full-access",
+        resumeCursor: session.resumeCursor,
+      });
+      const second = yield* adapter.sendTurn({ threadId, input: "Second" });
+      expect((yield* until("turn.completed")).turnId).toBe(second.turnId);
+    }).pipe(Effect.scoped),
+  );
   it.effect("cancels an active run without closing its session", () =>
     Effect.gen(function* () {
       const { adapter, until } = yield* setup("retry");

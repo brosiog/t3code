@@ -11,3 +11,5 @@ Image uploads are sent as images for models that support vision. Other file atta
 Pi skills, prompt templates, and extension commands appear in the slash-command picker. Terminal-only extension interfaces are subject to [Pi's RPC limitations](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/rpc-extension-ui.md). Plan mode and conversation rollback are unavailable.
 
 For separate Pi profiles, add another Pi provider instance and set its `PI_CODING_AGENT_DIR` environment variable to that profile's directory. Credentials, settings, models, and extensions follow that profile.
+
+If Pi reports that an uploaded image could not be resized, T3 already compresses uploads before sending them. In a dedicated Pi profile, set `"images": { "autoResize": false }` in its `settings.json` to avoid the extra resizing pass, then restart the provider session. Keep this change in the dedicated profile if other agents use your default Pi configuration.
