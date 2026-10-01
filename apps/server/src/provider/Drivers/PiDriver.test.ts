@@ -11,11 +11,18 @@ import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { NoOpProviderEventLoggers, ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { deriveProviderInstanceConfigMap } from "../Layers/ProviderInstanceRegistryHydration.ts";
-import { PiDriver } from "./PiDriver.ts";
+import { HttpClient } from "effect/unstable/http";
+import { PiDriver, piMaintenanceResolver } from "./PiDriver.ts";
 const decodeSnapshot = Schema.decodeUnknownEffect(ServerProvider);
 
 const layer = ServerConfig.layerTest(process.cwd(), { prefix: "t3-pi-driver-" }).pipe(
   Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(
+    Layer.succeed(
+      HttpClient.HttpClient,
+      HttpClient.make(() => Effect.die("No network in Pi driver tests")),
+    ),
+  ),
   Layer.provideMerge(ServerSettingsService.layerTest()),
   Layer.provideMerge(
     Layer.mock(BackgroundPolicy.BackgroundPolicy)({
@@ -89,5 +96,29 @@ it.layer(layer)("Pi driver", (it) => {
       ),
       Effect.scoped,
     ),
+  );
+});
+
+it.layer(NodeServices.layer)("Pi maintenance", (it) => {
+  it.effect("updates only the npm prefix that owns Pi", () =>
+    Effect.gen(function* () {
+      const capabilities = yield* piMaintenanceResolver.resolve({
+        binaryPath: "/t3/pi/bin/pi",
+        resolvedCommandPath: "/t3/pi/bin/pi",
+        realCommandPath: "/t3/pi/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
+        env: {},
+        platform: "darwin",
+      });
+      expect(capabilities.update?.args).toContain("/t3/pi");
+      expect(capabilities.update?.args).toContain("@earendil-works/pi-coding-agent@latest");
+      const wrapper = yield* piMaintenanceResolver.resolve({
+        binaryPath: "/t3/pi-wrapper",
+        resolvedCommandPath: "/t3/pi-wrapper",
+        realCommandPath: "/t3/pi-wrapper",
+        env: {},
+        platform: "darwin",
+      });
+      expect(wrapper.update).toBeNull();
+    }),
   );
 });

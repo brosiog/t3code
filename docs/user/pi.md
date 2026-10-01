@@ -2,7 +2,7 @@
 
 Install [Pi](https://github.com/earendil-works/pi) 0.87.1 or newer, then run `pi` and use `/login` to connect your account. Pi also supports provider API keys and compatible local servers configured in its `models.json`.
 
-In T3 Code, open Settings → Providers and enable Pi. Set its binary path if `pi` is not on your server's PATH. Models are discovered from the Pi profile on the machine running the T3 server. Refresh the provider after changing credentials, models, or extensions.
+In T3 Code, open Settings → Providers and enable Pi. Set its binary path if `pi` is not on your server's PATH. Models are discovered from the Pi profile on the machine running the T3 server. Refresh the provider after changing credentials, models, or extensions. T3 checks for Pi updates and offers Update now when a newer version is available for a supported package-manager installation. Custom wrappers require a manual update.
 
 Create a thread, select a Pi model, and choose Full access. Pi's tools run with your account's filesystem and command access. T3's approval and sandbox modes are not available for Pi. Pi approval extensions can still ask for confirmation or input through the chat.
 

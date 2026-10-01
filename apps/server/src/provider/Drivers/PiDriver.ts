@@ -13,6 +13,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
+import { HttpClient } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
@@ -26,7 +27,12 @@ import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import { makePiRpc } from "../piRpc.ts";
 import { defaultProviderContinuationIdentity, type ProviderDriver } from "../ProviderDriver.ts";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
-import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
+import {
+  enrichProviderSnapshotWithVersionAdvisory,
+  makeCachedProviderMaintenanceResolution,
+  makePackageManagedProviderMaintenanceResolver,
+  resolveProviderMaintenanceCapabilitiesEffect,
+} from "../providerMaintenance.ts";
 import {
   parseGenericCliVersion,
   providerModelsFromSettings,
@@ -38,6 +44,11 @@ import {
 } from "../providerUpdateSettings.ts";
 
 const DRIVER = ProviderDriverKind.make("pi");
+export const piMaintenanceResolver = makePackageManagedProviderMaintenanceResolver({
+  provider: DRIVER,
+  npmPackageName: "@earendil-works/pi-coding-agent",
+  nativeUpdate: null,
+});
 const decodeSettings = Schema.decodeSync(PiSettings);
 const emptyCapabilities = createModelCapabilities({ optionDescriptors: [] });
 const PiModels = Schema.Struct({
@@ -77,6 +88,7 @@ export function piModelsToServerModels(
 }
 
 export type PiDriverEnv =
+  | HttpClient.HttpClient
   | Crypto.Crypto
   | FileSystem.FileSystem
   | Path.Path
@@ -93,6 +105,9 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv> = {
   defaultConfig: () => decodeSettings({}),
   create: (input) =>
     Effect.gen(function* () {
+      const httpClient = yield* HttpClient.HttpClient;
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const serverConfig = yield* ServerConfig;
       const serverSettings = yield* ServerSettingsService;
@@ -109,10 +124,16 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv> = {
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
       });
       const textGeneration = yield* makePiTextGeneration(settings, environment);
-      const maintenance = makeManualOnlyProviderMaintenanceCapabilities({
-        provider: DRIVER,
-        packageName: "@earendil-works/pi-coding-agent",
-      });
+      const resolveMaintenance = yield* makeCachedProviderMaintenanceResolution(
+        resolveProviderMaintenanceCapabilitiesEffect(piMaintenanceResolver, {
+          binaryPath: settings.binaryPath,
+          env: environment,
+        }).pipe(
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          Effect.provideService(FileSystem.FileSystem, fs),
+          Effect.provideService(Path.Path, path),
+        ),
+      );
       const base = (checkedAt: string): ServerProvider => ({
         instanceId: input.instanceId,
         driver: DRIVER,
@@ -245,13 +266,23 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv> = {
         );
       const source = makeProviderSnapshotSettingsSource(settings, serverSettings);
       const snapshot = yield* makeManagedServerProvider({
-        resolveMaintenance: () => Effect.succeed(maintenance),
+        resolveMaintenance,
         getSettings: source.getSettings,
         streamSettings: source.streamSettings,
         haveSettingsChanged: haveProviderSnapshotSettingsChanged,
         initialSnapshot: () =>
           DateTime.now.pipe(Effect.map((date) => base(DateTime.formatIso(date)))),
         checkProvider: probe(serverConfig.cwd),
+        enrichSnapshot: ({ settings, snapshot, publishSnapshot }) =>
+          resolveMaintenance().pipe(
+            Effect.flatMap((maintenance) =>
+              enrichProviderSnapshotWithVersionAdvisory(snapshot, maintenance, {
+                enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
+              }),
+            ),
+            Effect.provideService(HttpClient.HttpClient, httpClient),
+            Effect.flatMap(publishSnapshot),
+          ),
         refreshOnInterval: false,
       }).pipe(
         Effect.mapError(
